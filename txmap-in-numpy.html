@@ -1,0 +1,501 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <style>
+        html {
+            height: 100%;
+            width: 100%;
+            margin: 0px;
+            padding: 0px;
+        }
+        body {
+            background: #333;
+            font-family: sans-serif;
+            color: #FFF;
+            overflow: hidden;
+            height: 100%;
+            width: 100%;
+            margin: 0px;
+            padding: 0px;
+        }
+        h1 {
+            text-align: center;
+        }
+        @keyframes pulseGlow {
+          from {
+            text-shadow: 0 0 0.10em #FFF;
+          }
+          to {
+            text-shadow: 0 0 0.25em #FFF, 0 0 0.50em #FFF;
+          }
+        }
+        .glow-text {
+          animation: pulseGlow 0.5s ease-in-out infinite alternate;
+        }
+        .code {
+            white-space: pre;
+            background: #000;
+            padding: 5vh;
+            border-radius: 2vh;
+            box-shadow: 1vh 1vh 4vh rgba(0,0,0,0.5);
+            display: inline-block;
+            color: #CFC;
+            font-weight: 400;
+            font-size: 110%;
+            font-family: Courier New;
+            transform: translate(-50%, -50%);
+            position: absolute;
+            left: 50%;
+            top: 50%;
+        }
+        .slide {
+            position: absolute;
+            border: solid 1px #FFF;
+            left: 50%;
+            top: 50%;
+            transform: translate(-50%, -50%);
+            background: #333;
+            color: #FFF;
+            opacity: 0;
+        }
+        .slideno {
+            position: absolute;
+            right: 0px;
+            bottom: 0px;
+            padding: 1vh;
+            font-size: 4vh;
+            color: #CCC;
+        }
+        ul {
+            margin-left: 20%;
+        }
+        ol {
+            margin-left: 20%;
+        }
+        li {
+            line-height: 140%;
+            width: 75%;
+            padding-bottom: 0.5em;
+        }
+        b {
+            color: #FA4;
+        }
+        .code b {
+            background: #F00;
+            color: #FFF;
+        }
+        u {
+            background: #F00;
+            text-decoration: none;
+        }
+        table {
+            margin-top: 3vh;
+            border-collapse: collapse;
+        }
+        td {
+            padding: 1vh;
+        }
+        th {
+            padding: 1vh;
+            font-weight: normal;
+        }
+        .char {
+            text-align: center;
+            width: 1em;
+            height: 1.2em;
+            font-size: 80%;
+            background: #000;
+            box-shadow: inset 0vh 0vh 0.5vh 0.125vh #FA4;
+            display: inline-block;
+        }
+    </style>
+  </head>
+  <body>
+    <script>
+
+let run = ()=>{
+    let src = document.getElementById("src").textContent.split("\n---\n"),
+        slides = (()=>{
+            let res = [],
+                audio = {};
+            src.forEach(ss => {
+                ss = ss.replace(/\[\[([a-zA-Z0-9_.]+)\]\]/g, (x, c) => { audio[res.length] = c; return ""; });
+                ss = ss.replace(/<code>\n(.*?)\n *<\/code>/gs, (x, c) => `<div class="code">${c.replace(/&/g, "&amp;").replace(/</g, "&lt;")}</div>`);
+                if (ss.indexOf(":1:") >= 0) {
+                    let n = 0;
+                    ss.replace(/:([0-9]+):/g, (x, g) => n = Math.max(n, +g));
+                    for (let i=0; i<=n; i++) {
+                        res.push(ss.replace(/:([0-9]+):/g, (x, g) => {
+                            if (+g > i) {
+                                return "style=\"visibility:hidden\"";
+                            } else {
+                                return "";
+                            }
+                        }));
+                    }
+                } else {
+                    let n = 0;
+                    ss.replace(/#([0-9]+)#/g, (x, g) => n = Math.max(n, +g));
+                    for (let i=0; i<=n; i++) {
+                        res.push(ss.replace(/#([0-9]+)#(.*?)##/gs, (x, g, c) => {
+                            if (+g !== i) {
+                                return c;
+                            } else {
+                                return "<b>" + c + "</b>";
+                            }
+                        }));
+                    }
+                }
+            });
+            res = res.map(ss => ss.replace(/%%(.*?)%%/g, (_, g) =>
+                      g.replace(/&#[0-9]+;/g, x => String.fromCharCode(+x.slice(2,-1)))
+                       .split("")
+                       .map(c => `<div class="char">${c.replace(/ /g,"&nbsp;")}</div>`)
+                       .join("")));
+            res.audio = audio;
+            return res;
+        })(),
+        current = null,
+        show = sno => {
+            localStorage.setItem("sno", sno);
+            let frame = document.createElement("div"),
+                sf = Math.min(innerWidth/16, innerHeight/9)*0.99;
+            frame.innerHTML = slides[sno];
+            frame.className = "slide";
+            frame.style.width = sf*16 + "px";
+            frame.style.height = sf*9 + "px";
+            frame.style.fontSize = sf*0.45 + "px";
+            let slideno = document.createElement("div");
+            slideno.className = "slideno";
+            slideno.textContent = sno+1;
+            frame.appendChild(slideno);
+            document.body.appendChild(frame);
+            frame._sno = sno;
+            frame.onmousedown = (event) => {
+                event.preventDefault();
+                event.stopPropagation();
+                if (event.button === 0) {
+                    if (sno < slides.length -1) show(sno+1);
+                } else if (event.button === 2) {
+                    if (sno > 0) show(sno-1);
+                }
+            }
+            if (slides.audio[sno]) {
+                let a = new Audio(slides.audio[sno]);
+                a.addEventListener("ended", ()=>{
+                    show(sno+1);
+                });
+                a.play();
+            }
+            let t0 = Date.now(),
+                cc = current,
+                anim = ()=>{
+                    let t = Math.min(1, (Date.now() - t0) / 250);
+                    frame.style.opacity = t;
+                    if (t === 1) {
+                        if (cc) document.body.removeChild(cc);
+                    } else {
+                        setTimeout(anim, 16);
+                    }
+                };
+            current = frame;
+            setTimeout(anim, 16);
+        };
+
+    document.oncontextmenu = (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+    };
+
+    let goto = "";
+
+    document.onkeydown = (event)=>{
+        if (event.key === "ArrowLeft" || event.key === "Tab") {
+            event.preventDefault();
+            event.stopPropagation();
+            if (current && current._sno > 0) show(current._sno-1);
+        } else if (event.key === "ArrowRight") {
+            event.preventDefault();
+            event.stopPropagation();
+            if (current && current._sno < slides.length-1) show(current._sno+1);
+        } else if (event.key === "ArrowUp") {
+            event.preventDefault();
+            event.stopPropagation();
+            show(0);
+        } else if (event.key === "ArrowDown") {
+            event.preventDefault();
+            event.stopPropagation();
+            show(slides.length-1);
+        } else if (event.key === "Backspace") {
+            event.preventDefault();
+            event.stopPropagation();
+            goto = "";
+        } else if (event.key >= "0" && event.key <= "9") {
+            event.preventDefault();
+            event.stopPropagation();
+            goto = goto + event.key;
+        } else if (event.key === "Enter") {
+            event.preventDefault();
+            event.stopPropagation();
+            if (goto.length) {
+                let n = +goto;
+                if (n >= 1) {
+                    show(Math.min(n, slides.length)-1);
+                }
+                goto = "";
+            } else {
+                if (current && current._sno < slides.length-1) show(current._sno+1);
+            }
+        }
+        return true;
+    };
+
+    show(+(localStorage.getItem("sno") || "0"));
+
+    let csz = innerWidth + "/" + innerHeight;
+    setInterval(()=>{
+        let sz = innerWidth + "/" + innerHeight;
+        if (sz !== csz) {
+            csz = sz;
+            show(current._sno);
+        }
+    }, 10);
+}
+
+    </script>
+    <script id="src" type="data">
+---
+    <h1><b>Texture mapping like it’s 1995<span :2:>⁽¹⁾</span></b></h1>
+    <center>
+    <div :1:><h2 style="font-size:300%">🤯 &nbsp;in Python<span :3:>⁽²⁾</span> 🤯</h2></div>
+    </center>
+    <div style="padding-left: 4em; line-height: 2em;">
+      <ol>
+        <li :2:> Pixel color computation done on CPU; screen is just a big array of bytes<br><br></li>
+        <li :3:> Using numpy <span :4:>(kinda cheating, I know)</span></li>
+      </ol>
+    </div>
+---
+    <img style="width:15%; position:absolute; right:5%; top:5%; transform:rotate(-10deg); box-shadow:0.125em 0.125em 0.125em #000" src="me-toon.png">
+    <h1>Who am I</h1>
+    <ul>
+      <li :1:>My name is Andrea "6502" Griffini</li>
+      <li :2:>I&#39;ve been professionally programming for 40+ years in many different fields
+      <li :3:>3d graphics is one of my hobbies</li>
+      <li :4:>Back in 1995 it was my job</li>
+    </ul>
+---
+    <h1>How it worked back in 1995</h1>
+    <ul>
+      <li :1:>No GPU</li>
+      <li :2:>Every pixel on the screen was computed by the CPU</li>
+      <li :3:>Single core... only partial parallelism on UV pipelines (required asm coding and the "new" Pentium processor)</li>
+      <li :4:>Many tricks were used</li>
+    </ul>
+---
+    <h1 style="position:relative; top:-0.5em">3d → 2d camera mapping</h1>
+    <img src="3d2d.png" style="position:absolute; left:50%; top:55%; transform:translate(-50%,-50%); height:75%;"></img>
+---
+    <h1 style="position:relative; top:-0.5em">Triangulation</h1>
+    <img src="bunnytri.png" style="position:absolute; left:50%; top:55%; transform:translate(-50%,-50%); height:75%;"></img>
+---
+    <h1 style="position:relative; top:-0.5em">Triangle rasterization</h1>
+    <img src="scan.png" style="position:absolute; left:50%; top:55%; transform:translate(-50%,-50%); height:75%;"></img>
+---
+    <h1 style="position:relative; top:-0.5em">Semiplane equation</h1>
+    <img src="semiplane.png" style="position:absolute; left:50%; top:55%; transform:translate(-50%,-50%); height:75%;"></img>
+---
+    <h1 style="position:relative; top:-0.5em">Triangle pixels selection</h1>
+    <img src="triangle.png" style="position:absolute; left:50%; top:55%; transform:translate(-50%,-50%); height:75%;"></img>
+---
+    <h1 style="position:relative; top:-0.5em">Linear texture mapping</h1>
+    <img src="xyuv.png" style="position:absolute; left:50%; top:55%; transform:translate(-50%,-50%); height:75%;"></img>
+---
+    <h1>Triangle drawing algorithm</h1>
+    <ul>
+      <li :1:>Project triangle to screen coordinates</li>
+      <li :2:>Compute <b>N<sub>x</sub></b>, <b>N<sub>y</sub></b> and <b>k</b> coefficients for each triangle side (<b>p₀→p₁</b>, <b>p₁→p₂</b>, <b>p₂→p₀</b>)</li>
+      <li :3:>Compute <b>u<sub>x</sub></b>, <b>u<sub>y</sub></b>, <b>u<sub>k</sub></b>,
+              <b>v<sub>x</sub></b>, <b>v<sub>y</sub></b>, <b>v<sub>k</sub></b> for the triangle</li>
+      <li :4:>Find all pixels inside the triangle</li>
+      <li :5:>Draw the texture mapped triangle mapping from <b>(x, y)</b> to <b>(u, v)</b> to find the texel to use for each pixel</li>
+---
+    <h1>Triangle drawing algorithm</h1>
+    <ul>
+      <li>Project triangle to screen coordinates</li>
+      <li>Compute <b>N<sub>x</sub></b>, <b>N<sub>y</sub></b> and <b>k</b> coefficients for each triangle side (<b>p₀→p₁</b>, <b>p₁→p₂</b>, <b>p₂→p₀</b>)</li>
+      <li>Compute <b>u<sub>x</sub></b>, <b>u<sub>y</sub></b>, <b>u<sub>k</sub></b>,
+          <b>v<sub>x</sub></b>, <b>v<sub>y</sub></b>, <b>v<sub>k</sub></b> for the triangle</li>
+      <li class="glow-text">Find all pixels inside the triangle</li>
+      <li class="glow-text">Draw the texture mapped triangle mapping from <b>(x, y)</b> to <b>(u, v)</b> to find the texel to use for each pixel</li>
+    </ul>
+---
+    <h1>NumPy to the rescue</h1>
+    <ol>
+        <li :1:>Can compute the same formula <b>"in parallel"</b> on all elements of arrays at the same time</li>
+        <li :2:>Loops are done in C (<b>~100</b> times faster than Python loops)</li>
+        <li :3:>Allows indirect access using an array and an array of indices</li>
+    </ol>
+---
+    <h1 style="position:relative; top:-0.5em"><b>u<sub>x</sub></b>, <b>u<sub>y</sub></b>, <b>u<sub>k</sub></b> computation</h1>
+    <img :1: src="cramer.png" style="position:absolute; left:50%; top:55%; transform:translate(-50%,-50%); height:75%;"></img>
+    <img :2: style="width:50%; position:absolute; left:50%; top:55%; transform:translate(-50%,-50%) rotate(10deg); box-shadow:0.25em 0.25em 0.25em #000" src="math.png">
+---
+    <h1 style="position:relative; top:-0.5em">Linear texture mapping</h1>
+    <img src="xyuv.png" style="position:absolute; left:50%; top:55%; transform:translate(-50%,-50%); height:75%;"></img>
+---
+    <h1 style="position:relative; top:-0.5em"><b>u<sub>x</sub></b>, <b>u<sub>y</sub></b>, <b>u<sub>k</sub></b> computation</h1>
+    <img src="cramer.png" style="position:absolute; left:50%; top:55%; transform:translate(-50%,-50%); height:75%;"></img>
+---
+    <h1 style="position:relative; top:-0.5em"><b>v<sub>x</sub></b>, <b>v<sub>y</sub></b>, <b>v<sub>k</sub></b> computation</h1>
+    <ul style="position:absolute; left:45%; top:50%; transform:translate(-50%, -50%) scale(120%) rotate(-0deg); width:75%">
+      <li :1:>Identical... but with <b>v</b> instead of <b>u</b></li>
+      <li :2:>Also <b>Δ</b> is the same as for <b>u</b><br><span :3:>(<b>Δ</b> depends only on <b>x</b>/<b>y</b>, not <b>u</b> or <b>v</b>)</span></li>
+      <li :4:><b>Δ=0</b> means you’ve a bad triangle<br>(vertices are aligned)</li>
+    </ul>
+---
+    <h1 style="position:relative; top:-0.5em">Coding time</h1>
+    <div :1: style="position:absolute;left:50%;top:55%;transform:translate(-50%,-50%) scale(0.3)">
+    <code>
+def triangle(x0, y0, u0, v0,
+             x1, y1, u1, v1,
+             x2, y2, u2, v2,
+             L, tx):
+    delta = (x1-x0)*(y2-y0) - (x2-x0)*(y1-y0)
+    if delta == 0: return
+    ux = ((u1-u0)*(y2-y0) - (u2-u0)*(y1-y0)) / delta
+    uy = ((x1-x0)*(u2-u0) - (x2-x0)*(u1-u0)) / delta
+    uk = u0 - x0*ux - y0*uy
+    vx = ((v1-v0)*(y2-y0) - (v2-v0)*(y1-y0)) / delta
+    vy = ((x1-x0)*(v2-v0) - (x2-x0)*(v1-v0)) / delta
+    vk = v0 - x0*vx - y0*vy
+
+    nx01, ny01 = y1-y0, x0-x1
+    nx12, ny12 = y2-y1, x1-x2
+    nx20, ny20 = y0-y2, x2-x0
+    k01 = -(x0*nx01 + y0*ny01)
+    k12 = -(x1*nx12 + y1*ny12)
+    k20 = -(x2*nx20 + y2*ny20)
+
+    th, tw = tx.shape[:2]
+    xa = max(0, int(min(x0, x1, x2)))
+    ya = max(0, int(min(y0, y1, y2)))
+    xb = min(w, int(max(x0, x1, x2))+1)
+    yb = min(h, int(max(y0, y1, y2))+1)
+    Xb = X[ya:yb, xa:xb]
+    Yb = Y[ya:yb, xa:xb]
+    aab = aa[ya:yb, xa:xb]
+    mask = (np.uint8(Xb*nx01 + Yb*ny01 + k01 <= 0) &
+            np.uint8(Xb*nx12 + Yb*ny12 + k12 <= 0) &
+            np.uint8(Xb*nx20 + Yb*ny20 + k20 <= 0))
+    xya = aab[mask == 1]
+    xx = X.ravel()[xya]
+    yy = Y.ravel()[xya]
+    uv = np.int32(xx*vx + yy*vy + vk) & (th-1)
+    uv *= tw
+    uv += np.int32(xx*ux + yy*uy + uk) & (tw-1)
+    img.reshape((w*h, 3))[xya] = np.int32(tx.reshape((tw*th,3))[uv] * L)
+    </code>
+    </div>
+---
+    <h1 style="position:relative; top:-0.5em">Coding time</h1>
+    <code>
+def triangle(x0, y0, u0, v0,
+             x1, y1, u1, v1,
+             x2, y2, u2, v2,
+             L, tx):
+    </code>
+---
+    <h1 style="position:relative; top:-0.5em">Code: xy→uv mapping coefficients</h1>
+    <div style="position:absolute; top:55%; left:50%; transform:translate(-50%,-50%)">
+    <code>
+delta = (x1-x0)*(y2-y0) - (x2-x0)*(y1-y0)
+if delta == 0: return
+
+ux = ((u1-u0)*(y2-y0) - (u2-u0)*(y1-y0)) / delta
+uy = ((x1-x0)*(u2-u0) - (x2-x0)*(u1-u0)) / delta
+uk = u0 - x0*ux - y0*uy
+
+vx = ((v1-v0)*(y2-y0) - (v2-v0)*(y1-y0)) / delta
+vy = ((x1-x0)*(v2-v0) - (x2-x0)*(v1-v0)) / delta
+vk = v0 - x0*vx - y0*vy
+    </code>
+    </div>
+---
+    <h1>Code: sides semiplane equations</h1>
+    <code>
+nx01, ny01 = y1-y0, x0-x1
+nx12, ny12 = y2-y1, x1-x2
+nx20, ny20 = y0-y2, x2-x0
+k01 = -(x0*nx01 + y0*ny01)
+k12 = -(x1*nx12 + y1*ny12)
+k20 = -(x2*nx20 + y2*ny20)
+    </code>
+---
+    <h1>Code: triangle pixels bounding box</h1>
+    <code>
+xa = max(0, int(min(x0, x1, x2)))
+ya = max(0, int(min(y0, y1, y2)))
+xb = min(w, int(max(x0, x1, x2))+1)
+yb = min(h, int(max(y0, y1, y2))+1)
+    </code>
+---
+    <h1>Code: numpy arrays for X, Y and pixel address</h1>
+    <code>
+Xb = X[ya:yb, xa:xb]
+Yb = Y[ya:yb, xa:xb]
+aab = aa[ya:yb, xa:xb]
+    </code>
+    <div style="box-shadow: 0.125em 0.125em 0.125em #000; padding:0.5em; border-radius:0.25em; background:#800; position:absolute; left:50%; bottom:10%; transform:translate(-50%,-50%) scale(150%) rotate(-7deg)">numpy 🪄🎩✨</div>
+---
+    <h1>Code: find all pixels inside triangle</h1>
+    <code>
+mask = (np.uint8(Xb*nx01 + Yb*ny01 + k01 <= 0) &
+        np.uint8(Xb*nx12 + Yb*ny12 + k12 <= 0) &
+        np.uint8(Xb*nx20 + Yb*ny20 + k20 <= 0))
+    </code>
+    <div style="box-shadow: 0.125em 0.125em 0.125em #000; padding:0.5em; border-radius:0.25em; background:#800; position:absolute; left:50%; bottom:10%; transform:translate(-50%,-50%) scale(150%) rotate(-7deg)">numpy 🪄🎩✨</div>
+---
+    <h1>Code: find their x/y/address</h1>
+    <code>
+xya = aab[mask == 1]
+xx = X.ravel()[xya]
+yy = Y.ravel()[xya]
+    </code>
+    <div style="box-shadow: 0.125em 0.125em 0.125em #000; padding:0.5em; border-radius:0.25em; background:#800; position:absolute; left:50%; bottom:10%; transform:translate(-50%,-50%) scale(150%) rotate(-7deg)">numpy 🪄🎩✨</div>
+---
+    <h1>Code: xy→uv & texels address</h1>
+    <code>
+uv = np.int32(xx*vx + yy*vy + vk) & (th-1)
+uv *= tw
+uv += np.int32(xx*ux + yy*uy + uk) & (tw-1)
+    </code>
+    <div style="box-shadow: 0.125em 0.125em 0.125em #000; padding:0.5em; border-radius:0.25em; background:#800; position:absolute; left:50%; bottom:10%; transform:translate(-50%,-50%) scale(150%) rotate(-7deg)">numpy 🪄🎩✨</div>
+---
+    <h1>Code: draw triangle pixels</h1>
+    <code>
+img.reshape((w*h, 3))[xya] = (
+   np.int32(tx.reshape((tw*th,3))[uv] * L)
+)
+    </code>
+    <div style="box-shadow: 0.125em 0.125em 0.125em #000; padding:0.5em; border-radius:0.25em; background:#800; position:absolute; left:50%; bottom:10%; transform:translate(-50%,-50%) scale(150%) rotate(-7deg)">numpy 🪄🎩✨</div>
+---
+    <h1>Demo time</h1>
+---
+    <h1>Questions?</h1>
+    <div style="box-shadow: 0.125em 0.125em 0.125em #000; border-radius: 0.5em; padding:1em; background:#444; position:absolute; left:50%; top:58%; transform:translate(-50%,-50%) scale(1.25);">
+      <div style="text-align:center;position:relative;top:-0.5em;padding:0.125em;background:#000;border-radius:0.125em">Andrea "6502" Griffini</div>
+      <table>
+        <tr><th style="position:relative; top:0.125em">🕸</th><td>https://andreagriffini.com</td></tr>
+        <tr><th style="position:relative; top:0.0625em">𝕏</th><td>@agriffini</td></tr>
+        <tr><th><img src="yt.png" style="height:1em;position:relative;top:0.125em"></th><td>@AndreaGriffini</td></tr>
+        <tr><th>✉️</th><td>pyit26@andreagriffini.com</td></tr>
+      </table>
+    </div>
+---
+    </script>
+    <script>
+    run();
+    </script>
+  </body>
+</html>
